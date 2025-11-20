@@ -1,20 +1,25 @@
 package com.ecs160;
-
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 import org.junit.Test;
 
-/**
- * Unit test for simple App.
- */
 public class AppTest 
 {
-    /**
-     * Rigorous Test :-)
-     */
     @Test
-    public void shouldAnswerWithTrue()
-    {
-        assertTrue( true );
+    public void testFrameworkScansAndInvokesEndpoints() throws Exception {
+        MicroserviceFramework framework = new MicroserviceFramework();
+
+        MockService service = new MockService();
+        framework.scanMicroservice(service);
+
+        assertTrue(framework.hasEndpoint("/greeting"));
+
+        String res1 = framework.invoke("/greeting", "World");
+        assertEquals("Hello World", res1);
+
+        assertTrue(framework.hasEndpoint("/echo"));
+
+        String res2 = framework.invoke("/echo", "Hi");
+        assertEquals("Hi", res2);
     }
 }
