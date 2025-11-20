@@ -1,2 +1,12 @@
 target/
 *.class
+
+# Vim swap files
+*.swp
+*~
+
+# Redis dump files (local dumps, not the HW1 data)
+dump.rdb
+
+# Maven
+.m2/
