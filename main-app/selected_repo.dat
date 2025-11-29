@@ -1,0 +1,6 @@
+repos:C:2
+app/src/main.c
+app/src/scrcpy.c
+app/src/controller.c
+app/src/display.c
+
