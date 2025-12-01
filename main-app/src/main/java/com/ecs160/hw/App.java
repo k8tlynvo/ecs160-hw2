@@ -5,6 +5,19 @@ import com.ecs160.hw.model.Repo;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import com.ecs160.hw.model.Issue;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonSerializer;
+import com.google.gson.JsonDeserializer;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 
 /**
  * Main application for Part D steps 1-4:
@@ -16,6 +29,15 @@ import java.util.*;
 public class App {
     public static void main(String[] args) {
         try {
+            Gson gson = new GsonBuilder()
+                .registerTypeAdapter(ZonedDateTime.class, 
+                    (JsonSerializer<ZonedDateTime>) (src, typeOfSrc, context) -> 
+                        context.serialize(src.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)))
+                .registerTypeAdapter(ZonedDateTime.class,
+                    (JsonDeserializer<ZonedDateTime>) (json, typeOfT, context) ->
+                        ZonedDateTime.parse(json.getAsString(), DateTimeFormatter.ISO_ZONED_DATE_TIME))
+                .create();
+
             // part 1 & 2: Read selected_repo.dat
             // First line is repoId, rest are file paths
             Path datFile = Paths.get("selected_repo.dat");
@@ -113,7 +135,97 @@ public class App {
                     System.err.println("Error: C file not found: " + filePath);
                 }
             }
-            
+
+            // 5. summarize issues
+            List<Issue> issues = loadedRepo.getIssues();
+            List <Map<String, Object>> IssueList1 = new ArrayList<>();
+
+            String microserviceAUrl = "http://localhost:8080/summarize_issue";
+
+            for (int i = 0; i < issues.size(); i++) {
+                Issue issue = issues.get(i);
+
+                String issueJson = gson.toJson(issue);
+
+                try {
+                    // call microservice A
+                    String summarizedIssue = callMicroservice(microserviceAUrl, issueJson);
+
+                    // parse response
+                    Map<String, Object> summarizedIssueMap = gson.fromJson(summarizedIssue, Map.class);
+                    IssueList1.add(summarizedIssueMap);
+                } catch (Exception e) {
+                    System.err.println("Error calling microservice A: " + e.getMessage());
+                }
+            }
+
+            // 6. find bugs
+            List<Map<String, Object>> IssueList2 = new ArrayList<>();
+
+            String microserviceBUrl = "http://localhost:8080/find_bugs";
+            for (int i = 0; i < cFiles.size(); i++) {
+                String filePath = cFiles.get(i);
+                Path fullPath = Paths.get(cloneDir, filePath);
+
+                try {
+                    String cCode = Files.readString(fullPath);
+
+                    // call microservice B
+                    String bugsJson = callMicroservice(microserviceBUrl, cCode);
+
+                    // parse response 
+                    bugsJson = bugsJson.trim();
+                    if (bugsJson.equals("[]")) {
+                        continue;
+                    } else {
+                        // remove brackets []
+                        String content = bugsJson.substring(1, bugsJson.length() - 1);
+
+                        // parse each bug object
+                        int pos = 0;
+                        while (pos < content.length()) {
+                            int start = content.indexOf('{', pos);
+                            if (start == -1) break;
+
+                            int end = findMatchingBrace(content, start);
+                            if (end == -1) break;
+
+                            String bugJson = content.substring(start, end + 1);
+                            Map<String, Object> bugMap = gson.fromJson(bugJson, Map.class);
+                            
+                            bugMap.put("filename", filePath);
+
+                            IssueList2.add(bugMap);
+                            pos = end + 1;
+
+                        }
+                    }
+
+                } catch (Exception e) {
+                    System.err.println("Error calling microservice B: " + e.getMessage());
+                }
+            }
+
+            // 7. compare IssueList1 and IssueList2 and print set of common issues
+            String microserviceCUrl = "http://localhost:8080/check_equivalence";
+
+            try {
+                List<List<Map<String, Object>>> reqList = new ArrayList<>();
+                reqList.add(IssueList1);
+                reqList.add(IssueList2);
+                String reqJson = gson.toJson(reqList);
+
+                String commonIssuesJson = callMicroservice(microserviceCUrl, reqJson);
+
+                // parse response as list of issues
+                List<Map<String, Object>> commonIssues = gson.fromJson(commonIssuesJson, List.class);
+                System.out.println("Common Issues: ");
+                for(Map<String, Object> issue: commonIssues) {
+                    System.out.println(issue);
+                }
+            } catch (Exception e) {
+                System.err.println("Error calling microservice C: " + e.getMessage());
+            }
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
             e.printStackTrace();
@@ -121,7 +233,7 @@ public class App {
     }
     
     // Helper method to delete directory recursively
-    private static void deleteDirectory(File directory) throws IOException {
+    static void deleteDirectory(File directory) throws IOException {
         if (directory.exists()) {
             File[] files = directory.listFiles();
             if (files != null) {
@@ -135,5 +247,32 @@ public class App {
             }
             directory.delete();
         }
+    }
+
+    // helper function to call microservices
+    static String callMicroservice(String url, String body) throws Exception {
+        try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
+            HttpPost post = new HttpPost(url);
+            post.setHeader("Content-Type", "application/json");
+            post.setEntity(new StringEntity(body));
+
+            try (CloseableHttpResponse response = httpClient.execute(post)) {
+                return EntityUtils.toString(response.getEntity());
+            }
+        }
+    }
+
+    // helper function to find matching closing brace, return pos of brace or -1 if not found
+    static int findMatchingBrace(String content, int start) {
+        int end = 0;
+        for (int i = start; i < content.length(); i++) {
+            char c = content.charAt(i);
+            if (c == '{') end++;
+            if (c == '}') {
+                end--;
+                if (end == 0) return i;
+            }
+        }
+        return -1;
     }
 }

@@ -30,7 +30,7 @@ public class IssueSummarizerMicroservice {
         try {
             // prep prompt
             String prompt = "You are an AI agent that summarizes GitHub issues into structured bug reports. " + 
-            "You must follow these rules: Only return a single JSON object. Do not include explanations, reasoning, or any text outside of the JSON. " + 
+            "You must follow these rules: Only return ONE JSON object. Do not include explanations, reasoning, or any text outside of the JSON. " + 
             "Do not include \"<think>\" sections. Do not wrap the JSON text in \"```json```\" formatting. The JSON format must exactly be: \n" +
             "{\n " + 
             "  \"bug_type\": \"<type of bug>\",\n" +
@@ -66,38 +66,40 @@ public class IssueSummarizerMicroservice {
     // get Issue obj from agent response
     private Issue parseIssue(String response) {
         try {
-            // find {}
-            int start = response.indexOf('{');
+            // find last }s
             int end = response.lastIndexOf('}');
-    
-            if (start == -1 || end == -1 || end < start) {
-                return new Issue(
-                    "Generic Issue",
-                    0,
-                    "Failed to parse: " + response.substring(0, Math.min(100, response.length())),
-                    "unknown"
-                );
+            if (end == -1) {
+                return new Issue("Unknown Issue", 0, "Failed to find last closing brace: " + response.substring(0, 10), "unknown");
+            }
+
+            // go backwards to find opening brace
+            int start = -1;
+            for (int i = end; i >= 0; i--) {
+                if (response.charAt(i) == '{') {
+                    start = i;
+                    break;
+                }
+            }
+            
+            if (start == -1 || start > end) {
+                return new Issue("Unknown Issue", 0, "Failed to find matching opening brace: " + response.substring(0, 10), "unknown");
             }
     
-            String jsonStr = response.substring(start, end + 1);
+            String jsonStr = response.substring(start, end + 1).trim();
     
             // parse json into Issue
             Issue issue = gson.fromJson(jsonStr, Issue.class);
     
             // set default value to null fields
-            if (issue.getBugType() == null) issue.setBugType("Generic Issue");
+            if (issue.getBugType() == null) issue.setBugType("Unknown Issue");
             if (issue.getDescription() == null) issue.setDescription("Issue extracted from GitHub");
             if (issue.getFilename() == null) issue.setFilename("unknown");
             if (issue.getLine() < 0) issue.setLine(0);
     
             return issue;
         } catch (Exception e) {
-            return new Issue(
-                "Generic Issue",
-                0,
-                "Failed to parse: " + response.substring(0, Math.min(100, response.length())),
-                "unknown"
-            );
+            return new Issue("Unknown Issue", 0,
+                    "Failed to parse: " + response.substring(0, 10), "unknown");
         }
     }
 }
