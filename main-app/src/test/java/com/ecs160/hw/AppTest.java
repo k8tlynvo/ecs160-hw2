@@ -31,7 +31,7 @@ public class AppTest
     }
 
     @Test
-    public void testFindMatchingBraceSimple() {
+    public void testFindMatchingBrace() {
         String input = "{123}";
         int pos = App.findMatchingBrace(input, 0);
         assertEquals(4, pos);
