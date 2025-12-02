@@ -147,7 +147,12 @@ public class AppTest
     // IssueComparatorMicroserviceTests
     @Test
     public void testCheckEquivalenceWithCommonIssues() throws Exception {
-        IssueComparatorMicroservice service = new IssueComparatorMicroservice();
+        OllamaClientInterface mockOllama = Mockito.mock(OllamaClientInterface.class);
+        Mockito.when(mockOllama.generate(Mockito.anyString(), Mockito.anyString()))
+           .thenReturn("[{\"bug_type\":\"NullPointer\",\"line\":22,\"description\":\"Null pointer dereference\",\"filename\":\"test.c\"}]");
+       
+        IssueComparatorMicroservice service = new IssueComparatorMicroservice(mockOllama);
+
 
         // two lists with one common issue
         String inputJson = "[[" +
@@ -169,7 +174,11 @@ public class AppTest
 
     @Test
     public void testCheckEquivalenceNoCommonIssues() throws Exception {
-        IssueComparatorMicroservice service = new IssueComparatorMicroservice();
+        OllamaClientInterface mockOllama = Mockito.mock(OllamaClientInterface.class);
+        Mockito.when(mockOllama.generate(Mockito.anyString(), Mockito.anyString()))
+           .thenReturn("[]");
+       
+        IssueComparatorMicroservice service = new IssueComparatorMicroservice(mockOllama);
 
         // lists with no common issues
         String inputJson = "[[" +
