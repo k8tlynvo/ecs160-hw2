@@ -71,7 +71,7 @@ public class BugFinderMicroservice {
         );
         issues.add(defaultError);
 
-        return gson.toJson(defaultError);
+        return gson.toJson(issues);
 
     }
 
