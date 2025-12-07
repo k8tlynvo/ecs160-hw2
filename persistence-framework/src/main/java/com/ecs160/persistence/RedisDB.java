@@ -183,7 +183,9 @@ public class RedisDB {
                     if (childType != null) {
                         String parentLanguage = null;
                         if (clazz.getSimpleName().equals("Repo") && field.getName().equals("issues")) {
-                            parentLanguage = (String) clazz.getDeclaredField("language").get(result);
+                            Field langField = clazz.getDeclaredField("language");
+                            langField.setAccessible(true);
+                            parentLanguage = (String) langField.get(result);
                         }
 
                         for (String childId : childIds) {
